@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Rephraser AI</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="popup-shell">
+      <header class="popup-header">
+        <img class="popup-logo" src="icons/icon-48.png" alt="" aria-hidden="true" />
+        <div class="popup-title">
+          <h1>Rephraser AI</h1>
+        </div>
+        <div class="header-language">
+          <select id="uiLanguage" class="language-select" aria-label="Langue de l'interface" data-i18n-aria-label="languageLabel">
+            <option value="" data-i18n="languageAutoShort">Auto</option>
+            <option value="fr">FR</option>
+            <option value="en">EN</option>
+            <option value="de">DE</option>
+            <option value="es">ES</option>
+            <option value="pt">PT</option>
+          </select>
+          <p id="languageStatus" class="language-hint" data-i18n="languagePremiumHelp">Choix manuel reserve aux abonnes payants.</p>
+        </div>
+      </header>
+
+      <section class="auth-panel panel">
+        <div class="section-title-row">
+          <h2 data-i18n="accountTitle">Compte</h2>
+        </div>
+        <p id="accountStatus" data-i18n="demoMode">Mode demo.</p>
+
+        <form id="authForm" class="settings-form">
+          <label>
+            <span data-i18n="emailLabel">Email</span>
+            <input id="email" type="email" autocomplete="email" placeholder="vous@example.com" data-i18n-placeholder="emailPlaceholder" />
+          </label>
+
+          <label>
+            <span data-i18n="passwordLabel">Mot de passe</span>
+            <input id="password" type="password" autocomplete="current-password" placeholder="8 caracteres minimum" data-i18n-placeholder="passwordPlaceholder" />
+          </label>
+
+          <div class="button-row">
+            <button id="loginButton" type="button" data-i18n="loginButton">Connexion</button>
+            <button id="registerButton" type="button" class="secondary-button" data-i18n="registerButton">Inscription</button>
+          </div>
+        </form>
+
+        <div id="accountSignedIn" class="account-signed-in" hidden>
+          <button id="openProfile" type="button" data-i18n="profileButton">Profil</button>
+        </div>
+      </section>
+
+      <details class="billing-panel panel collapsible-panel" open>
+        <summary class="panel-summary">
+          <h2 data-i18n="billingTitle">Abonnement</h2>
+        </summary>
+        <div class="collapsible-body">
+          <p id="billingStatus" data-i18n="billingSignedOut">Connectez-vous pour gerer votre abonnement.</p>
+          <div id="plansList" class="plans-list" aria-live="polite"></div>
+        </div>
+      </details>
+
+      <section class="composer-panel panel">
+        <div class="section-title-row">
+          <h2 data-i18n="composerTitle">Ecrire dans l'extension</h2>
+          <span class="premium-pill" data-i18n="premiumBadge">Premium</span>
+        </div>
+        <form id="composerForm" class="composer-form">
+          <label>
+            <span data-i18n="composerTextLabel">Texte</span>
+            <textarea id="composerText" rows="4" data-i18n-placeholder="composerPlaceholder" placeholder="Ecris ou colle ton texte ici"></textarea>
+          </label>
+          <label>
+            <span data-i18n="composerActionLabel">Action</span>
+            <select id="composerAction">
+              <option value="correct" data-i18n="actionCorrect">Corriger</option>
+              <option value="professionalize" data-i18n="actionProfessionalize">Professionnaliser</option>
+              <option value="enrich" data-i18n="actionEnrich">Enrichir</option>
+              <option value="shorten" data-i18n="actionShorten">Raccourcir</option>
+              <option value="reply" data-i18n="actionReply">Repondre a cette selection</option>
+              <option value="linkedin_message" data-i18n="actionLinkedinMessage">Message LinkedIn</option>
+              <option value="promptify" data-i18n="actionPromptify">Transformer en prompt IA</option>
+            </select>
+          </label>
+          <button id="composerSubmit" type="submit" data-i18n="composerSubmit">Generer</button>
+        </form>
+        <p id="composerStatus" class="composer-status" data-i18n="composerPremiumHelp">Disponible a partir de Premium.</p>
+      </section>
+
+      <section class="last-result panel" aria-live="polite">
+        <div class="section-title-row">
+          <h2 data-i18n="lastResultTitle">Dernier resultat</h2>
+          <button id="copyLastResult" type="button" class="secondary-button compact-button" data-i18n="copyButton" disabled>Copier</button>
+        </div>
+        <p id="lastResult">Aucun resultat pour le moment.</p>
+        <details id="historyPanel" class="history-panel">
+          <summary data-i18n="historyTitle">Historique des 5 dernieres requetes</summary>
+          <p id="historyStatus" class="history-status" data-i18n="historyPremiumHelp">Historique reserve aux abonnes Premium.</p>
+          <div id="historyList" class="history-list"></div>
+        </details>
+      </section>
+    </main>
+
+    <section id="profileView" class="profile-view" hidden aria-label="Profil">
+      <div class="profile-header">
+        <button id="closeProfile" type="button" class="icon-back" aria-label="Retour" data-i18n-aria-label="backButton">
+          <span aria-hidden="true">&#8592;</span>
+        </button>
+        <h2 data-i18n="profileTitle">Mon profil</h2>
+      </div>
+
+      <div class="profile-scroll">
+        <section class="profile-block panel">
+          <h3 data-i18n="profileAccountTitle">Informations du compte</h3>
+          <dl class="profile-list">
+            <div class="profile-row">
+              <dt data-i18n="emailLabel">Email</dt>
+              <dd id="profileEmail">-</dd>
+            </div>
+            <div class="profile-row">
+              <dt data-i18n="profilePlanLabel">Offre</dt>
+              <dd id="profilePlan">-</dd>
+            </div>
+            <div class="profile-row">
+              <dt data-i18n="profileStatusLabel">Statut</dt>
+              <dd id="profileStatusValue">-</dd>
+            </div>
+            <div class="profile-row" id="profileCancelRow" hidden>
+              <dt data-i18n="profileAccessUntilLabel">Acces jusqu'au</dt>
+              <dd id="profileCancelAt">-</dd>
+            </div>
+          </dl>
+        </section>
+
+        <section class="profile-block panel">
+          <h3 data-i18n="profileUsageTitle">Consommation ce mois</h3>
+          <p id="profileUsage" class="profile-usage">-</p>
+          <div class="usage-bar" aria-hidden="true"><span id="profileUsageBar" class="usage-bar-fill"></span></div>
+        </section>
+
+        <section class="profile-block panel" id="subscriptionManage" hidden>
+          <h3 data-i18n="profileSubscriptionTitle">Abonnement</h3>
+          <p id="cancellationNotice" class="cancellation-notice" hidden></p>
+          <button id="cancelSubscription" type="button" class="secondary-button" data-i18n="cancelSubscriptionButton">Annuler l'abonnement</button>
+          <button id="resumeSubscription" type="button" class="secondary-button" data-i18n="resumeSubscriptionButton" hidden>Reprendre l'abonnement</button>
+          <p id="profileSubStatus" class="profile-sub-status" aria-live="polite"></p>
+        </section>
+
+        <section class="profile-block panel">
+          <h3 data-i18n="profileSessionTitle">Session</h3>
+          <button id="logoutButton" type="button" class="danger-button" data-i18n="logoutButton">Deconnexion</button>
+        </section>
+
+        <section class="profile-block panel gdpr-zone">
+          <h3 data-i18n="profileDataTitle">Mes donnees</h3>
+          <p class="gdpr-note" data-i18n="gdprNote">Conformement au RGPD, vous pouvez exercer votre droit a l'effacement a tout moment. La suppression entraine un desabonnement instantane et l'effacement definitif de votre compte.</p>
+          <button id="deleteAccount" type="button" class="danger-button" data-i18n="deleteAccountButton">Supprimer mes donnees</button>
+          <div id="deleteConfirm" class="delete-confirm" role="alertdialog" aria-live="assertive" hidden>
+            <p class="delete-warning" data-i18n="deleteConfirmText">Etes-vous sur de vouloir supprimer vos donnees ? Cela entrainera un desabonnement instantane.</p>
+            <div class="button-row">
+              <button id="deleteCancel" type="button" class="secondary-button" data-i18n="deleteCancelButton">Annuler</button>
+              <button id="deleteConfirmBtn" type="button" class="danger-button" data-i18n="deleteConfirmButton">Confirmer la suppression</button>
+            </div>
+          </div>
+          <p id="deleteStatus" class="delete-status" aria-live="polite"></p>
+        </section>
+
+        <a class="profile-support-link" href="https://rephraser-ai.netlify.app/#support" target="_blank" rel="noopener noreferrer" data-i18n="profileSupportLink">Aide et support</a>
+      </div>
+    </section>
+
+    <script src="i18n-runtime.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>
