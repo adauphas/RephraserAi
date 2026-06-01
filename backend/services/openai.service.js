@@ -67,7 +67,7 @@ async function callOpenAI(systemPrompt, userContent) {
 
 async function rewriteWithOpenAI(prompt) {
   return callOpenAI(
-    "Tu transformes des textes avec precision. Tu retournes uniquement le texte final, sans explication.",
+    "Tu es un assistant de redaction. Selon la consigne, tu corriges, reecris, traduis ou rediges un texte (y compris repondre a un message). Tu suis precisement la consigne donnee et tu retournes uniquement le texte final demande, sans explication ni commentaire.",
     prompt
   );
 }

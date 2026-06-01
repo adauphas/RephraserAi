@@ -783,6 +783,67 @@ function isPaidPlanContent(plan) {
   return Boolean(plan && plan !== "Free");
 }
 
+// Vrai tant que le script tourne dans un contexte d'extension valide. Devient faux apres
+// une mise a jour / un rechargement de l'extension sur un onglet deja ouvert.
+function isExtensionContextValid() {
+  try {
+    return Boolean(chrome.runtime && chrome.runtime.id);
+  } catch (error) {
+    return false;
+  }
+}
+
+// Message minimal (sans appel chrome.*) invitant a recharger la page apres une MAJ.
+function showStaleContextNotice() {
+  ensureStyles();
+  if (currentModal) {
+    currentModal.remove();
+  }
+  const overlay = document.createElement("div");
+  overlay.className = "ai-rewriter-overlay";
+  const dialog = document.createElement("section");
+  dialog.className = "ai-rewriter-dialog";
+  const header = document.createElement("div");
+  header.className = "ai-rewriter-header";
+  const titleWrap = document.createElement("div");
+  titleWrap.className = "ai-rewriter-title";
+  const mark = document.createElement("span");
+  mark.className = "ai-rewriter-mark";
+  mark.textContent = "R";
+  const titleText = document.createElement("div");
+  const eyebrow = document.createElement("p");
+  eyebrow.className = "ai-rewriter-eyebrow";
+  eyebrow.textContent = "Rephraser AI";
+  const title = document.createElement("h2");
+  title.textContent = "Rechargez la page";
+  titleText.append(eyebrow, title);
+  titleWrap.append(mark, titleText);
+  const closeButton = document.createElement("button");
+  closeButton.type = "button";
+  closeButton.className = "ai-rewriter-icon-button";
+  closeButton.textContent = "x";
+  closeButton.addEventListener("click", () => overlay.remove());
+  header.append(titleWrap, closeButton);
+  const body = document.createElement("div");
+  body.className = "ai-rewriter-body";
+  const message = document.createElement("p");
+  message.style.margin = "0";
+  message.style.fontSize = "14px";
+  message.style.lineHeight = "1.5";
+  message.style.fontWeight = "600";
+  message.style.color = "#15211f";
+  message.textContent = "Rephraser AI a ete mis a jour. Rechargez cette page (F5) pour reactiver l'extension. / Please reload this page (F5).";
+  body.append(message);
+  dialog.append(header, body);
+  overlay.append(dialog);
+  document.documentElement.append(overlay);
+  currentModal = overlay;
+  // L'icone obsolete n'a plus d'utilite.
+  if (quickFixIcon) {
+    quickFixIcon.classList.remove("is-visible");
+  }
+}
+
 async function refreshQuickFixSettings() {
   const stored = await chrome.storage.sync.get({
     aiRewriterInPageIcon: true,
@@ -979,6 +1040,10 @@ async function openActionMenu() {
   if (!quickFixTarget || !quickFixTarget.isConnected) {
     return;
   }
+  if (!isExtensionContextValid()) {
+    showStaleContextNotice();
+    return;
+  }
 
   const paidLanguage = isPaidPlanContent(quickFixSettings.plan) ? quickFixSettings.uiLanguage : "";
   await RephraserI18n.init(paidLanguage);
@@ -1046,10 +1111,21 @@ function positionQuickFixIcon() {
   }
   const size = 26;
   const margin = 6;
-  const top = window.scrollY + rect.top + margin;
+
+  // Champ bas : on colle l'icone dans le coin bas-droite. Champ court (input d'une ligne) :
+  // on la centre verticalement pour ne pas chevaucher le texte saisi.
+  let top;
+  if (rect.height <= size + margin * 2) {
+    top = window.scrollY + rect.top + (rect.height - size) / 2;
+  } else {
+    top = window.scrollY + rect.bottom - size - margin;
+  }
   const left = window.scrollX + rect.right - size - margin;
+
+  // On garde l'icone visible dans la fenetre.
+  const maxLeft = window.scrollX + window.innerWidth - size - 2;
   quickFixIcon.style.top = `${Math.max(window.scrollY + 2, top)}px`;
-  quickFixIcon.style.left = `${Math.max(window.scrollX + 2, left)}px`;
+  quickFixIcon.style.left = `${Math.min(maxLeft, Math.max(window.scrollX + 2, left))}px`;
 }
 
 function showQuickFixIcon(target) {
@@ -1121,6 +1197,12 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
 async function runQuickFix(overrideAction = null) {
   if (quickFixBusy || !quickFixTarget || !quickFixTarget.isConnected) {
+    return;
+  }
+
+  // Extension rechargee/mise a jour sur un onglet deja ouvert : on previent au lieu de crasher.
+  if (!isExtensionContextValid()) {
+    showStaleContextNotice();
     return;
   }
 

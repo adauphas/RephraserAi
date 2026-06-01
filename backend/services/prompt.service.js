@@ -29,7 +29,7 @@ const ACTIONS = Object.freeze({
   },
   reply: {
     label: "Repondre a cette selection",
-    instruction: "Redige une reponse pertinente, claire et adaptee au texte selectionne."
+    instruction: "Tu es le destinataire du message ci-dessous. Analyse son intention, son ton et chacun des points qu'il souleve, puis redige une VRAIE reponse adressee a son auteur. La reponse doit etre claire, pertinente et naturelle, traiter les points importants et, si le message pose des questions, y repondre. Adapte le ton (formel ou detendu) a celui du message et conserve sa langue. Important : ne corrige pas et ne reformule pas le message d'origine, ne le repete pas : produis uniquement la reponse."
   },
   linkedin_message: {
     label: "Message LinkedIn",
@@ -74,18 +74,24 @@ function buildPrompt(action, text) {
     throw new Error("Action inconnue.");
   }
 
+  // "reply" est generatif (on repond au texte) et non transformatif : on adapte les
+  // contraintes et le libelle pour ne pas pousser le modele a corriger/reformuler.
+  const isReply = action === "reply";
+
   return [
     ACTIONS[action].instruction,
     "",
     "Contraintes strictes :",
     "- Ne pas ajouter d'explication inutile.",
-    "- Retourner uniquement le texte final transforme.",
+    isReply
+      ? "- Retourner uniquement la reponse, sans commentaire."
+      : "- Retourner uniquement le texte final demande, sans commentaire.",
     "- Ne pas mettre de guillemets autour du resultat.",
     "- Ne pas ajouter de phrase introductive.",
-    "- Garder la langue cible demandee.",
+    isReply ? "- Conserver la langue du message." : "- Garder la langue cible demandee.",
     "- Pour les corrections simples, ne pas modifier le sens.",
     "",
-    "Texte :",
+    isReply ? "Message auquel repondre :" : "Texte :",
     text
   ].join("\n");
 }
