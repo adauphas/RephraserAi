@@ -40,11 +40,12 @@ function corsOrigin(origin, callback) {
 app.use(cors({ origin: corsOrigin }));
 app.use("/api/billing/webhook", express.raw({ type: "application/json" }), stripeWebhookRoutes);
 app.use(express.json({ limit: "12kb" }));
-app.use(globalRateLimiter);
 
 app.get("/health", (req, res) => {
   res.json({ status: "ok" });
 });
+
+app.use(globalRateLimiter);
 
 app.use("/api/auth", authRoutes);
 app.use("/api/billing", billingRoutes);
