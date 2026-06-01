@@ -7,6 +7,7 @@ const { globalRateLimiter } = require("./middleware/rateLimit.middleware");
 const authRoutes = require("./routes/auth.routes");
 const billingRoutes = require("./routes/billing.routes");
 const rewriteRoutes = require("./routes/rewrite.routes");
+const chatRoutes = require("./routes/chat.routes");
 const stripeWebhookRoutes = require("./routes/stripe.webhook.routes");
 
 const app = express();
@@ -50,6 +51,7 @@ app.use(globalRateLimiter);
 app.use("/api/auth", authRoutes);
 app.use("/api/billing", billingRoutes);
 app.use("/api/rewrite", rewriteRoutes);
+app.use("/api/chat", chatRoutes);
 
 app.use((req, res) => {
   res.status(404).json({

@@ -8,7 +8,7 @@
     "start": "node server.js",
     "start:3006": "node -e \"process.env.PORT='3006'; require('./server')\"",
     "dev": "node --watch server.js",
-    "check": "node --check server.js && node --check config/plans.js && node --check config/openai.js && node --check config/stripe.js && node --check database/db.js && node --check repositories/stripe-event.repository.js && node --check repositories/user.repository.js && node --check routes/auth.routes.js && node --check routes/billing.routes.js && node --check routes/rewrite.routes.js && node --check routes/stripe.webhook.routes.js && node --check services/auth.service.js && node --check services/billing.service.js && node --check services/openai.service.js && node --check services/quota.service.js && node --check services/prompt.service.js && node --check middleware/auth.middleware.js && node --check middleware/rateLimit.middleware.js"
+    "check": "node --check server.js && node --check config/plans.js && node --check config/openai.js && node --check config/stripe.js && node --check database/db.js && node --check repositories/stripe-event.repository.js && node --check repositories/user.repository.js && node --check routes/auth.routes.js && node --check routes/billing.routes.js && node --check routes/rewrite.routes.js && node --check routes/chat.routes.js && node --check routes/stripe.webhook.routes.js && node --check services/auth.service.js && node --check services/billing.service.js && node --check services/openai.service.js && node --check services/quota.service.js && node --check services/prompt.service.js && node --check middleware/auth.middleware.js && node --check middleware/rateLimit.middleware.js"
   },
   "dependencies": {
     "pg": "^8.13.1",

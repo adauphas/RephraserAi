@@ -20,7 +20,7 @@ function extractOutputText(payload) {
   return texts.join("\n").trim();
 }
 
-async function rewriteWithOpenAI(prompt) {
+async function callOpenAI(systemPrompt, userContent) {
   assertAuthorizedModel();
 
   if (!process.env.OPENAI_API_KEY) {
@@ -38,11 +38,11 @@ async function rewriteWithOpenAI(prompt) {
       input: [
         {
           role: "system",
-          content: "Tu transformes des textes avec precision. Tu retournes uniquement le texte final, sans explication."
+          content: systemPrompt
         },
         {
           role: "user",
-          content: prompt
+          content: userContent
         }
       ]
     })
@@ -64,6 +64,22 @@ async function rewriteWithOpenAI(prompt) {
   return text;
 }
 
+async function rewriteWithOpenAI(prompt) {
+  return callOpenAI(
+    "Tu transformes des textes avec precision. Tu retournes uniquement le texte final, sans explication.",
+    prompt
+  );
+}
+
+// Assistant conversationnel libre (section "Discuter avec l'IA", reservee aux comptes premium).
+async function chatWithOpenAI(message) {
+  return callOpenAI(
+    "Tu es l'assistant IA de Rephraser AI. Tu reponds de maniere claire, utile et concise a la question de l'utilisateur. Reponds dans la meme langue que la question.",
+    message
+  );
+}
+
 module.exports = {
-  rewriteWithOpenAI
+  rewriteWithOpenAI,
+  chatWithOpenAI
 };
