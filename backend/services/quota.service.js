@@ -47,7 +47,8 @@ function getNextPlanName(planName) {
   return PLAN_ORDER[index + 1];
 }
 
-async function verifyQuota({ userId, text }) {
+async function verifyQuota({ userId, text, units = 1 }) {
+  const requiredUnits = Number.isFinite(units) && units > 0 ? Math.floor(units) : 1;
   const user = await findUserById(userId);
 
   if (!user) {
@@ -81,7 +82,7 @@ async function verifyQuota({ userId, text }) {
     };
   }
 
-  if (user.monthlyUsage >= plan.monthlyRequests) {
+  if (user.monthlyUsage + requiredUnits > plan.monthlyRequests) {
     const nextPlanName = getNextPlanName(plan.name);
 
     return {
@@ -104,7 +105,7 @@ async function verifyQuota({ userId, text }) {
     };
   }
 
-  if (user.dailyUsage >= plan.dailyRequests) {
+  if (user.dailyUsage + requiredUnits > plan.dailyRequests) {
     const nextPlanName = getNextPlanName(plan.name);
 
     return {
@@ -137,10 +138,10 @@ async function verifyQuota({ userId, text }) {
   };
 }
 
-async function incrementUsage(user) {
+async function incrementUsage(user, units = 1) {
   await ensureCurrentMonth(user);
   await ensureCurrentDay(user);
-  const updatedUser = await incrementMonthlyUsage(user.id);
+  const updatedUser = await incrementMonthlyUsage(user.id, units);
   user.monthlyUsage = updatedUser.monthlyUsage;
   user.currentMonth = updatedUser.currentMonth;
   user.dailyUsage = updatedUser.dailyUsage;

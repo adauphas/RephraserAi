@@ -76,8 +76,37 @@ const composerText = document.getElementById("composerText");
 const composerAction = document.getElementById("composerAction");
 const composerSubmit = document.getElementById("composerSubmit");
 const composerStatus = document.getElementById("composerStatus");
+const chatPanel = document.querySelector(".chat-panel");
+const chatForm = document.getElementById("chatForm");
+const chatInput = document.getElementById("chatInput");
+const chatSubmit = document.getElementById("chatSubmit");
+const chatStatus = document.getElementById("chatStatus");
+const chatAnswerRow = document.getElementById("chatAnswerRow");
+const chatAnswer = document.getElementById("chatAnswer");
+const chatCopy = document.getElementById("chatCopy");
+const chatAttach = document.getElementById("chatAttach");
+const chatImageInput = document.getElementById("chatImageInput");
+const chatImages = document.getElementById("chatImages");
+const chatImageHint = document.getElementById("chatImageHint");
+
+// Images jointes au prochain message (URL data redimensionnees a 512px max).
+const MAX_CHAT_IMAGES = 2;
+const CHAT_IMAGE_MAX_SIZE = 512;
+let attachedImages = [];
+const sectionsContainer = document.getElementById("sectionsContainer");
+const inPageIconToggle = document.getElementById("inPageIconToggle");
+const quickActionSelect = document.getElementById("quickActionSelect");
+const quickActionStatus = document.getElementById("quickActionStatus");
+
+// Point 4 : ordre par defaut des sections, variable selon l'abonnement.
+const SECTION_DEFAULT_ORDER = {
+  free: ["account", "billing", "composer", "chat"],
+  paid: ["chat", "composer", "billing", "account"]
+};
+const DEFAULT_QUICK_ACTION = "correct";
 
 let languageHintTimer = null;
+let quickActionStatusTimer = null;
 let lastResultText = "";
 let currentHistory = [];
 let currentUser = null;
@@ -164,7 +193,10 @@ async function getSyncSettings() {
     aiRewriterAuthToken: "",
     aiRewriterAccountEmail: "",
     aiRewriterAccountPlan: "",
-    aiRewriterUiLanguage: ""
+    aiRewriterUiLanguage: "",
+    aiRewriterSectionOrder: [],
+    aiRewriterInPageIcon: true,
+    aiRewriterQuickAction: DEFAULT_QUICK_ACTION
   });
 }
 
@@ -175,6 +207,8 @@ async function applyRuntimeLanguage(settings) {
   localizeStaticText();
   renderLanguageControl(settings);
   renderComposerControl(settings);
+  renderChatControl(settings);
+  applySectionOrder(settings);
 }
 
 async function loadSettings(settings = null) {
@@ -194,6 +228,9 @@ async function loadSettings(settings = null) {
   renderAccountStatus(syncSettings);
   renderLanguageControl(syncSettings);
   renderComposerControl(syncSettings);
+  renderChatControl(syncSettings);
+  applySectionOrder(syncSettings);
+  loadQuickFixSettings(syncSettings);
   await loadHistory(syncSettings);
   loadBilling(syncSettings);
 
@@ -510,6 +547,348 @@ function renderComposerControl(settings) {
     composerStatus.textContent = t("composerReady", "Write directly here, then choose an action.");
   }
 }
+
+// Point 2 : section "Discuter avec l'IA", reservee a Premium et superieur.
+function renderChatControl(settings) {
+  const plan = getEffectivePlan(settings);
+  const unlocked = isPlanAtLeast(plan, "Premium");
+  const imageUnlocked = isPlanAtLeast(plan, "Premium+");
+  chatPanel.classList.toggle("is-locked", !unlocked);
+  chatInput.disabled = !unlocked;
+  chatSubmit.disabled = !unlocked;
+  chatAttach.disabled = !imageUnlocked;
+  chatAttach.hidden = !unlocked;
+  chatImageHint.hidden = !unlocked || imageUnlocked;
+
+  if (!unlocked) {
+    chatStatus.className = "chat-status";
+    chatStatus.textContent = t("chatPremiumHelp", "Available from Premium.");
+  } else if (!chatStatus.textContent || chatStatus.textContent === t("chatPremiumHelp", "Available from Premium.")) {
+    chatStatus.className = "chat-status";
+    chatStatus.textContent = t("chatReady", "Ask anything, like on a chatbot home page.");
+  }
+}
+
+chatForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const settings = await getSyncSettings();
+  const plan = getEffectivePlan(settings);
+
+  if (!isPlanAtLeast(plan, "Premium")) {
+    chatStatus.className = "chat-status error";
+    chatStatus.textContent = t("chatPremiumHelp", "Available from Premium.");
+    return;
+  }
+
+  const message = chatInput.value.trim();
+
+  if (!message) {
+    chatStatus.className = "chat-status error";
+    chatStatus.textContent = t("chatEmptyError", "Type a question first.");
+    return;
+  }
+
+  chatSubmit.disabled = true;
+  chatStatus.className = "chat-status is-loading";
+  chatStatus.textContent = t("chatLoading", "Thinking...");
+
+  try {
+    const backendUrl = normalizeBackendUrl(settings.aiRewriterBackendUrl);
+    const headers = {
+      "Content-Type": "application/json",
+      "X-User-Id": settings.aiRewriterUserId
+    };
+    if (settings.aiRewriterAuthToken) {
+      headers.Authorization = `Bearer ${settings.aiRewriterAuthToken}`;
+    }
+
+    const body = { message };
+    if (attachedImages.length > 0) {
+      body.images = attachedImages.slice();
+    }
+
+    const response = await fetch(`${backendUrl}/api/chat`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body)
+    });
+    const payload = await response.json().catch(() => ({}));
+
+    if (!response.ok || !payload.text) {
+      throw new Error(payload.error || t("errorBackendContact", "Unable to reach the backend."));
+    }
+
+    chatAnswer.textContent = payload.text;
+    chatAnswerRow.hidden = false;
+    chatStatus.className = "chat-status success";
+    chatStatus.textContent = t("chatSuccess", "Answer ready below.");
+    // On vide les images apres un envoi reussi.
+    attachedImages = [];
+    renderChatImages();
+  } catch (error) {
+    chatStatus.className = "chat-status error";
+    chatStatus.textContent = error.message || t("errorGenericReload", "An error occurred.");
+  } finally {
+    renderChatControl(await getSyncSettings());
+  }
+});
+
+// Redimensionne une image (max 512px) et la convertit en URL data JPEG (detail bas).
+function readResizedImage(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+      const scale = Math.min(1, CHAT_IMAGE_MAX_SIZE / Math.max(width, height));
+      width = Math.max(1, Math.round(width * scale));
+      height = Math.max(1, Math.round(height * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL("image/jpeg", 0.7));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error(t("chatImageError", "This image could not be read.")));
+    };
+    img.src = url;
+  });
+}
+
+function renderChatImages() {
+  chatImages.textContent = "";
+  attachedImages.forEach((dataUrl, index) => {
+    const thumb = document.createElement("div");
+    thumb.className = "chat-image-thumb";
+
+    const img = document.createElement("img");
+    img.src = dataUrl;
+    img.alt = "";
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "chat-image-remove";
+    remove.setAttribute("aria-label", t("chatRemoveImage", "Remove image"));
+    remove.textContent = "×";
+    remove.addEventListener("click", () => {
+      attachedImages.splice(index, 1);
+      renderChatImages();
+    });
+
+    thumb.append(img, remove);
+    chatImages.append(thumb);
+  });
+}
+
+async function addChatImageFiles(files) {
+  const settings = await getSyncSettings();
+  if (!isPlanAtLeast(getEffectivePlan(settings), "Premium+")) {
+    chatStatus.className = "chat-status error";
+    chatStatus.textContent = t("chatImageHint", "Images are reserved for Premium+ subscribers.");
+    return;
+  }
+
+  const imageFiles = Array.from(files).filter((file) => file.type.startsWith("image/"));
+  if (!imageFiles.length) {
+    return;
+  }
+
+  for (const file of imageFiles) {
+    if (attachedImages.length >= MAX_CHAT_IMAGES) {
+      chatStatus.className = "chat-status error";
+      chatStatus.textContent = t("chatImageMax", "You can attach up to $1 images.", [String(MAX_CHAT_IMAGES)]);
+      break;
+    }
+    try {
+      const dataUrl = await readResizedImage(file);
+      attachedImages.push(dataUrl);
+    } catch (error) {
+      chatStatus.className = "chat-status error";
+      chatStatus.textContent = error.message || t("chatImageError", "This image could not be read.");
+    }
+  }
+
+  renderChatImages();
+}
+
+chatAttach.addEventListener("click", () => {
+  if (chatAttach.disabled) {
+    return;
+  }
+  chatImageInput.click();
+});
+
+chatImageInput.addEventListener("change", () => {
+  if (chatImageInput.files?.length) {
+    addChatImageFiles(chatImageInput.files);
+    chatImageInput.value = "";
+  }
+});
+
+// Collage d'image directement dans le champ de question.
+chatInput.addEventListener("paste", (event) => {
+  const items = event.clipboardData?.items || [];
+  const files = [];
+  for (const item of items) {
+    if (item.kind === "file" && item.type.startsWith("image/")) {
+      const file = item.getAsFile();
+      if (file) {
+        files.push(file);
+      }
+    }
+  }
+  if (files.length) {
+    event.preventDefault();
+    addChatImageFiles(files);
+  }
+});
+
+// Glisser-deposer d'image sur le champ de question.
+chatInput.addEventListener("dragover", (event) => {
+  if (event.dataTransfer?.types?.includes("Files")) {
+    event.preventDefault();
+  }
+});
+
+chatInput.addEventListener("drop", (event) => {
+  const files = event.dataTransfer?.files;
+  if (files?.length) {
+    event.preventDefault();
+    addChatImageFiles(files);
+  }
+});
+
+chatCopy.addEventListener("click", async () => {
+  if (!chatAnswer.textContent) {
+    return;
+  }
+  await navigator.clipboard.writeText(chatAnswer.textContent);
+  chatCopy.textContent = t("copiedButton", "Copied");
+  setTimeout(() => {
+    chatCopy.textContent = t("copyButton", "Copy");
+  }, 1400);
+});
+
+// Points 3 & 4 : repli des sections + reorganisation par fleches, ordre memorise.
+function getMovableSections() {
+  return Array.from(sectionsContainer.querySelectorAll(":scope > [data-section]"));
+}
+
+function applySectionOrder(settings) {
+  const paid = isPaidPlan(getEffectivePlan(settings));
+  const fallback = paid ? SECTION_DEFAULT_ORDER.paid : SECTION_DEFAULT_ORDER.free;
+  const saved = Array.isArray(settings.aiRewriterSectionOrder) ? settings.aiRewriterSectionOrder : [];
+
+  const sections = getMovableSections();
+  const byName = new Map(sections.map((node) => [node.dataset.section, node]));
+  const validNames = new Set(byName.keys());
+
+  // On part de l'ordre memorise (filtre sur les sections existantes), puis on complete
+  // avec l'ordre par defaut pour ne jamais perdre une section.
+  const order = [];
+  for (const name of saved) {
+    if (validNames.has(name) && !order.includes(name)) {
+      order.push(name);
+    }
+  }
+  for (const name of fallback) {
+    if (validNames.has(name) && !order.includes(name)) {
+      order.push(name);
+    }
+  }
+  for (const name of validNames) {
+    if (!order.includes(name)) {
+      order.push(name);
+    }
+  }
+
+  for (const name of order) {
+    const node = byName.get(name);
+    if (node) {
+      sectionsContainer.append(node);
+    }
+  }
+
+  updateReorderButtons();
+}
+
+function updateReorderButtons() {
+  const sections = getMovableSections();
+  sections.forEach((node, index) => {
+    const upButton = node.querySelector('.reorder-btn[data-dir="up"]');
+    const downButton = node.querySelector('.reorder-btn[data-dir="down"]');
+    if (upButton) {
+      upButton.disabled = index === 0;
+    }
+    if (downButton) {
+      downButton.disabled = index === sections.length - 1;
+    }
+  });
+}
+
+async function moveSection(node, direction) {
+  const sections = getMovableSections();
+  const index = sections.indexOf(node);
+  const target = direction === "up" ? index - 1 : index + 1;
+
+  if (target < 0 || target >= sections.length) {
+    return;
+  }
+
+  if (direction === "up") {
+    sectionsContainer.insertBefore(node, sections[target]);
+  } else {
+    sectionsContainer.insertBefore(sections[target], node);
+  }
+
+  updateReorderButtons();
+  const order = getMovableSections().map((item) => item.dataset.section);
+  await chrome.storage.sync.set({ aiRewriterSectionOrder: order });
+}
+
+sectionsContainer.addEventListener("click", (event) => {
+  const button = event.target.closest(".reorder-btn");
+  if (!button) {
+    return;
+  }
+  // Empeche le clic d'ouvrir/fermer le <details>.
+  event.preventDefault();
+  event.stopPropagation();
+  const node = button.closest("[data-section]");
+  if (node) {
+    moveSection(node, button.dataset.dir);
+  }
+});
+
+// Point 1 (reglages) : activation de l'icone dans les champs + action rapide au clic.
+function loadQuickFixSettings(settings) {
+  inPageIconToggle.checked = settings.aiRewriterInPageIcon !== false;
+  quickActionSelect.value = settings.aiRewriterQuickAction || DEFAULT_QUICK_ACTION;
+}
+
+function flashQuickActionStatus() {
+  quickActionStatus.className = "profile-sub-status success";
+  quickActionStatus.textContent = t("savedButton", "Saved");
+  clearTimeout(quickActionStatusTimer);
+  quickActionStatusTimer = setTimeout(() => {
+    quickActionStatus.textContent = "";
+    quickActionStatus.className = "profile-sub-status";
+  }, 1600);
+}
+
+inPageIconToggle.addEventListener("change", async () => {
+  await chrome.storage.sync.set({ aiRewriterInPageIcon: inPageIconToggle.checked });
+  flashQuickActionStatus();
+});
+
+quickActionSelect.addEventListener("change", async () => {
+  await chrome.storage.sync.set({ aiRewriterQuickAction: quickActionSelect.value || DEFAULT_QUICK_ACTION });
+  flashQuickActionStatus();
+});
 
 async function loadHistory(settings = null) {
   const localSettings = await chrome.storage.local.get({

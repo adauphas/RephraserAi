@@ -75,15 +75,16 @@ async function updateDailyUsage(userId, dailyUsage, currentDay) {
   );
 }
 
-async function incrementMonthlyUsage(userId) {
+async function incrementMonthlyUsage(userId, units = 1) {
+  const safeUnits = Number.isFinite(units) && units > 0 ? Math.floor(units) : 1;
   const { rows } = await pool.query(
     `UPDATE users
-     SET monthly_usage = monthly_usage + 1,
-         daily_usage = daily_usage + 1,
+     SET monthly_usage = monthly_usage + $2,
+         daily_usage = daily_usage + $2,
          updated_at = now()
      WHERE id = $1
      RETURNING *`,
-    [userId]
+    [userId, safeUnits]
   );
 
   return mapUser(rows[0]);

@@ -68,6 +68,48 @@ function isEditableElement(element) {
   return tagName === "textarea" || (tagName === "input" && /^(text|search|url|tel|email)?$/i.test(element.type || "text"));
 }
 
+function isContentEditableElement(element) {
+  return Boolean(element && element.isContentEditable);
+}
+
+// Champ pris en charge par l'icone flottante (point 1).
+function isQuickFixTarget(element) {
+  if (!element) return false;
+  if (isContentEditableElement(element)) {
+    return true;
+  }
+  if (!isEditableElement(element)) {
+    return false;
+  }
+  return !element.readOnly && !element.disabled;
+}
+
+function readFieldText(element) {
+  if (isContentEditableElement(element)) {
+    return element.innerText || element.textContent || "";
+  }
+  return element.value || "";
+}
+
+function writeFieldText(element, value) {
+  if (isContentEditableElement(element)) {
+    element.focus();
+    element.textContent = value;
+    element.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertReplacementText", data: value }));
+    return true;
+  }
+
+  if (isEditableElement(element)) {
+    element.focus();
+    element.value = value;
+    element.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertReplacementText", data: value }));
+    element.dispatchEvent(new Event("change", { bubbles: true }));
+    return true;
+  }
+
+  return false;
+}
+
 function rememberSelection() {
   const activeElement = document.activeElement;
 
@@ -723,3 +765,449 @@ function ensureStyles() {
   `;
   document.documentElement.append(style);
 }
+
+/* =========================================================================
+   Point 1 : icone flottante dans les champs de saisie.
+   Affichee au focus d'un champ editable, un clic applique l'action rapide
+   choisie dans le profil (par defaut "correct") et remplace le texte.
+   ========================================================================= */
+
+const DEFAULT_QUICK_ACTION = "correct";
+let quickFixIcon = null;
+let quickFixTarget = null;
+let quickFixBusy = false;
+let quickFixSettings = { enabled: true, action: DEFAULT_QUICK_ACTION, uiLanguage: "", plan: "" };
+let hideIconTimer = null;
+
+function isPaidPlanContent(plan) {
+  return Boolean(plan && plan !== "Free");
+}
+
+async function refreshQuickFixSettings() {
+  const stored = await chrome.storage.sync.get({
+    aiRewriterInPageIcon: true,
+    aiRewriterQuickAction: DEFAULT_QUICK_ACTION,
+    aiRewriterUiLanguage: "",
+    aiRewriterAccountPlan: ""
+  });
+  quickFixSettings = {
+    enabled: stored.aiRewriterInPageIcon !== false,
+    action: stored.aiRewriterQuickAction || DEFAULT_QUICK_ACTION,
+    uiLanguage: stored.aiRewriterUiLanguage || "",
+    plan: stored.aiRewriterAccountPlan || ""
+  };
+  return quickFixSettings;
+}
+
+function ensureIconStyles() {
+  if (document.getElementById("ai-rewriter-icon-style")) {
+    return;
+  }
+  const style = document.createElement("style");
+  style.id = "ai-rewriter-icon-style";
+  style.textContent = `
+    .ai-rewriter-fab {
+      position: absolute;
+      z-index: 2147483646;
+      display: grid;
+      place-items: center;
+      width: 26px;
+      height: 26px;
+      border: none;
+      border-radius: 7px;
+      background: linear-gradient(135deg, #16736b, #285a9f);
+      color: #ffffff;
+      cursor: pointer;
+      padding: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+      font-size: 14px;
+      font-weight: 900;
+      line-height: 1;
+      box-shadow: 0 4px 12px rgba(21, 33, 31, 0.32);
+      opacity: 0;
+      transform: scale(0.85);
+      transition: opacity 120ms ease, transform 120ms ease;
+    }
+    .ai-rewriter-fab.is-visible {
+      opacity: 1;
+      transform: scale(1);
+    }
+    .ai-rewriter-fab:hover {
+      box-shadow: 0 6px 16px rgba(40, 90, 159, 0.4);
+    }
+    .ai-rewriter-fab.is-busy {
+      cursor: progress;
+    }
+    .ai-rewriter-fab.is-busy .ai-rewriter-fab-mark {
+      display: none;
+    }
+    .ai-rewriter-fab.is-busy::after {
+      content: "";
+      width: 13px;
+      height: 13px;
+      border: 2px solid rgba(255, 255, 255, 0.4);
+      border-top-color: #ffffff;
+      border-radius: 50%;
+      animation: ai-rewriter-spin 0.7s linear infinite;
+    }
+    .ai-rewriter-menu {
+      position: absolute;
+      z-index: 2147483647;
+      min-width: 190px;
+      max-height: 280px;
+      overflow-y: auto;
+      margin: 0;
+      padding: 5px;
+      list-style: none;
+      border: 1px solid rgba(21, 33, 31, 0.16);
+      border-radius: 9px;
+      background: #ffffff;
+      box-shadow: 0 14px 34px rgba(10, 17, 24, 0.26);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+    }
+    .ai-rewriter-menu-title {
+      margin: 2px 6px 5px;
+      color: #63716e;
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+    .ai-rewriter-menu-item {
+      display: block;
+      width: 100%;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      color: #15211f;
+      cursor: pointer;
+      padding: 7px 9px;
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1.2;
+      text-align: left;
+    }
+    .ai-rewriter-menu-item:hover {
+      background: rgba(40, 90, 159, 0.1);
+    }
+    .ai-rewriter-menu-item.is-active {
+      color: #16736b;
+      font-weight: 800;
+    }
+    .ai-rewriter-menu-item.is-active::after {
+      content: " \\2713";
+    }
+  `;
+  document.documentElement.append(style);
+}
+
+function ensureQuickFixIcon() {
+  if (quickFixIcon) {
+    return quickFixIcon;
+  }
+  ensureIconStyles();
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "ai-rewriter-fab";
+  button.setAttribute("aria-label", "Rephraser AI");
+  const mark = document.createElement("span");
+  mark.className = "ai-rewriter-fab-mark";
+  mark.textContent = "R";
+  button.append(mark);
+
+  // mousedown : on empeche le champ de perdre le focus avant le clic.
+  button.addEventListener("mousedown", (event) => event.preventDefault());
+  button.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    runQuickFix();
+  });
+  // Clic droit : menu pour changer le type d'action applique.
+  button.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openActionMenu();
+  });
+
+  document.documentElement.append(button);
+  quickFixIcon = button;
+  return button;
+}
+
+// Actions proposees au clic droit (point : "modifier le type d'action").
+const QUICK_FIX_MENU_ACTIONS = [
+  "correct",
+  "professionalize",
+  "enrich",
+  "shorten",
+  "formal",
+  "casual",
+  "reply",
+  "promptify",
+  "linkedin_message",
+  "translate_en",
+  "translate_fr",
+  "translate_es",
+  "translate_de",
+  "translate_pt"
+];
+let quickFixMenu = null;
+
+function closeActionMenu() {
+  if (quickFixMenu) {
+    quickFixMenu.remove();
+    quickFixMenu = null;
+    document.removeEventListener("mousedown", onMenuOutsidePointer, true);
+    document.removeEventListener("keydown", onMenuKeydown, true);
+  }
+}
+
+function onMenuOutsidePointer(event) {
+  if (quickFixMenu && !quickFixMenu.contains(event.target) && event.target !== quickFixIcon) {
+    closeActionMenu();
+  }
+}
+
+function onMenuKeydown(event) {
+  if (event.key === "Escape") {
+    closeActionMenu();
+  }
+}
+
+async function openActionMenu() {
+  closeActionMenu();
+  if (!quickFixTarget || !quickFixTarget.isConnected) {
+    return;
+  }
+
+  const paidLanguage = isPaidPlanContent(quickFixSettings.plan) ? quickFixSettings.uiLanguage : "";
+  await RephraserI18n.init(paidLanguage);
+  ensureIconStyles();
+
+  const menu = document.createElement("div");
+  menu.className = "ai-rewriter-menu";
+  menu.setAttribute("role", "menu");
+
+  const title = document.createElement("p");
+  title.className = "ai-rewriter-menu-title";
+  title.textContent = t("quickActionMenuTitle", "Choose an action");
+  menu.append(title);
+
+  for (const action of QUICK_FIX_MENU_ACTIONS) {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "ai-rewriter-menu-item";
+    if (action === quickFixSettings.action) {
+      item.classList.add("is-active");
+    }
+    item.setAttribute("role", "menuitem");
+    item.textContent = getActionLabel(action);
+    // mousedown : on garde le focus du champ ; on agit au mousedown pour fiabilite.
+    // Choix ponctuel : on applique cette action une fois sans changer l'action par defaut
+    // (l'icone revient toujours sur "Corriger" au clic gauche).
+    item.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      closeActionMenu();
+      runQuickFix(action);
+    });
+    menu.append(item);
+  }
+
+  document.documentElement.append(menu);
+  quickFixMenu = menu;
+
+  // Positionnement sous l'icone, en restant dans la fenetre.
+  const iconRect = quickFixIcon.getBoundingClientRect();
+  const menuRect = menu.getBoundingClientRect();
+  let left = window.scrollX + iconRect.right - menuRect.width;
+  let top = window.scrollY + iconRect.bottom + 4;
+  if (left < window.scrollX + 4) {
+    left = window.scrollX + 4;
+  }
+  if (top + menuRect.height > window.scrollY + window.innerHeight) {
+    top = window.scrollY + iconRect.top - menuRect.height - 4;
+  }
+  menu.style.left = `${left}px`;
+  menu.style.top = `${Math.max(window.scrollY + 2, top)}px`;
+
+  document.addEventListener("mousedown", onMenuOutsidePointer, true);
+  document.addEventListener("keydown", onMenuKeydown, true);
+}
+
+function positionQuickFixIcon() {
+  if (!quickFixIcon || !quickFixTarget || !quickFixTarget.isConnected) {
+    return;
+  }
+  const rect = quickFixTarget.getBoundingClientRect();
+  if (rect.width === 0 && rect.height === 0) {
+    hideQuickFixIcon();
+    return;
+  }
+  const size = 26;
+  const margin = 6;
+  const top = window.scrollY + rect.top + margin;
+  const left = window.scrollX + rect.right - size - margin;
+  quickFixIcon.style.top = `${Math.max(window.scrollY + 2, top)}px`;
+  quickFixIcon.style.left = `${Math.max(window.scrollX + 2, left)}px`;
+}
+
+function showQuickFixIcon(target) {
+  if (!quickFixSettings.enabled) {
+    return;
+  }
+  clearTimeout(hideIconTimer);
+  quickFixTarget = target;
+  const icon = ensureQuickFixIcon();
+  icon.title = "Rephraser AI";
+  positionQuickFixIcon();
+  icon.classList.add("is-visible");
+}
+
+function hideQuickFixIcon() {
+  // On garde l'icone visible tant que le menu d'actions est ouvert ou qu'une requete tourne.
+  if (!quickFixIcon || quickFixBusy || quickFixMenu) {
+    return;
+  }
+  quickFixIcon.classList.remove("is-visible");
+}
+
+document.addEventListener("focusin", (event) => {
+  if (!quickFixSettings.enabled) {
+    return;
+  }
+  if (isQuickFixTarget(event.target)) {
+    showQuickFixIcon(event.target);
+  }
+}, true);
+
+document.addEventListener("focusout", () => {
+  // Petit delai pour permettre au clic sur l'icone d'aboutir.
+  hideIconTimer = setTimeout(hideQuickFixIcon, 180);
+}, true);
+
+window.addEventListener("scroll", () => {
+  if (quickFixIcon && quickFixIcon.classList.contains("is-visible")) {
+    positionQuickFixIcon();
+  }
+}, true);
+
+window.addEventListener("resize", () => {
+  if (quickFixIcon && quickFixIcon.classList.contains("is-visible")) {
+    positionQuickFixIcon();
+  }
+});
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== "sync") {
+    return;
+  }
+  if (changes.aiRewriterInPageIcon) {
+    quickFixSettings.enabled = changes.aiRewriterInPageIcon.newValue !== false;
+    if (!quickFixSettings.enabled) {
+      hideQuickFixIcon();
+    }
+  }
+  if (changes.aiRewriterQuickAction) {
+    quickFixSettings.action = changes.aiRewriterQuickAction.newValue || DEFAULT_QUICK_ACTION;
+  }
+  if (changes.aiRewriterUiLanguage) {
+    quickFixSettings.uiLanguage = changes.aiRewriterUiLanguage.newValue || "";
+  }
+  if (changes.aiRewriterAccountPlan) {
+    quickFixSettings.plan = changes.aiRewriterAccountPlan.newValue || "";
+  }
+});
+
+async function runQuickFix(overrideAction = null) {
+  if (quickFixBusy || !quickFixTarget || !quickFixTarget.isConnected) {
+    return;
+  }
+
+  const target = quickFixTarget;
+  const text = readFieldText(target).trim();
+  // overrideAction : choix ponctuel via le clic droit. Sinon action par defaut (Corriger).
+  const action = overrideAction || quickFixSettings.action || DEFAULT_QUICK_ACTION;
+  const paidLanguage = isPaidPlanContent(quickFixSettings.plan) ? quickFixSettings.uiLanguage : "";
+  await RephraserI18n.init(paidLanguage);
+
+  if (!text) {
+    renderModal({
+      actionLabel: getActionLabel(action),
+      state: "error",
+      error: t("errorEmptyField", "The field is empty.")
+    });
+    return;
+  }
+
+  quickFixBusy = true;
+  if (quickFixIcon) {
+    quickFixIcon.classList.add("is-busy", "is-visible");
+  }
+
+  let settings = null;
+  try {
+    settings = await chrome.storage.sync.get({
+      aiRewriterBackendUrl: DEFAULT_BACKEND_URL,
+      aiRewriterUserId: DEFAULT_USER_ID,
+      aiRewriterAuthToken: ""
+    });
+
+    const result = await requestRewrite({
+      backendUrl: settings.aiRewriterBackendUrl,
+      userId: settings.aiRewriterUserId,
+      authToken: settings.aiRewriterAuthToken || "",
+      action,
+      text
+    });
+
+    await saveResultEntry({
+      action,
+      actionLabel: getActionLabel(action),
+      result: result.text
+    });
+
+    const replaced = writeFieldText(target, result.text);
+
+    if (!replaced) {
+      // Remplacement impossible : on bascule sur la fenetre resultat habituelle.
+      renderModal({
+        actionLabel: getActionLabel(action),
+        state: "success",
+        result: result.text,
+        originalText: text,
+        usage: result.usage
+      });
+    }
+  } catch (error) {
+    if ((error.status === 429 || error.status === 403) && error.payload?.nextPlan) {
+      renderModal({
+        actionLabel: error.payload?.reason === "paid_feature_required"
+          ? t("paidFeatureTitle", "Premium feature")
+          : t("quotaReachedTitle", "Quota reached"),
+        state: "upgrade",
+        error: error.message,
+        usage: error.payload.usage,
+        upgrade: {
+          plan: error.payload.nextPlan,
+          backendUrl: settings?.aiRewriterBackendUrl || DEFAULT_BACKEND_URL,
+          authToken: settings?.aiRewriterAuthToken || ""
+        }
+      });
+    } else {
+      renderModal({
+        actionLabel: getActionLabel(action),
+        state: "error",
+        error: error.message || t("errorGenericReload", "An error occurred. Reload the extension and the tab if it persists.")
+      });
+    }
+  } finally {
+    quickFixBusy = false;
+    if (quickFixIcon) {
+      quickFixIcon.classList.remove("is-busy");
+    }
+  }
+}
+
+// Initialisation des reglages de l'icone au chargement du content script.
+refreshQuickFixSettings();

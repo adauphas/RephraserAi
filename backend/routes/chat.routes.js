@@ -17,6 +17,28 @@ const PLAN_RANKS = {
 
 // La discussion libre avec l'IA est reservee aux abonnes Premium et superieurs.
 const CHAT_MINIMUM_PLAN = "Premium";
+// L'envoi d'images est reserve a Premium+ et superieur, et coute plus cher en quota.
+const IMAGE_MINIMUM_PLAN = "Premium+";
+const IMAGE_QUOTA_UNITS = 3;
+const MAX_IMAGES = 2;
+
+// Valide un tableau d'URL data d'images (data:image/...;base64,...).
+function sanitizeImages(images) {
+  if (images === undefined || images === null) {
+    return [];
+  }
+  if (!Array.isArray(images)) {
+    throw new Error("Le format des images est invalide.");
+  }
+  const valid = images.filter((image) => typeof image === "string" && /^data:image\/(png|jpe?g|webp|gif);base64,/i.test(image));
+  if (valid.length !== images.length) {
+    throw new Error("Une image fournie est dans un format non pris en charge.");
+  }
+  if (valid.length > MAX_IMAGES) {
+    throw new Error(`Vous pouvez envoyer au maximum ${MAX_IMAGES} images par message.`);
+  }
+  return valid;
+}
 
 function isPlanAtLeast(planName, minimumPlan) {
   return (PLAN_RANKS[planName] ?? 0) >= (PLAN_RANKS[minimumPlan] ?? 0);
@@ -55,10 +77,21 @@ router.post("/", rewriteRateLimiter, mockAuthMiddleware, async (req, res) => {
       });
     }
 
+    let images = [];
+    try {
+      images = sanitizeImages(req.body?.images);
+    } catch (imageError) {
+      return res.status(400).json({ error: imageError.message });
+    }
+
+    const hasImages = images.length > 0;
+    const requiredUnits = hasImages ? IMAGE_QUOTA_UNITS : 1;
+
     const normalizedMessage = message.trim();
     const quota = await verifyQuota({
       userId: req.userId,
-      text: normalizedMessage
+      text: normalizedMessage,
+      units: requiredUnits
     });
 
     if (!quota.allowed) {
@@ -81,9 +114,20 @@ router.post("/", rewriteRateLimiter, mockAuthMiddleware, async (req, res) => {
       });
     }
 
-    const answer = await chatWithOpenAI(normalizedMessage);
+    // L'envoi d'images necessite Premium+ au minimum.
+    if (hasImages && !isPlanAtLeast(quota.plan.name, IMAGE_MINIMUM_PLAN)) {
+      return res.status(403).json({
+        error: "L'envoi d'images est reserve aux abonnes Premium+ et Premium Pro.",
+        reason: "paid_feature_required",
+        plan: quota.plan.name,
+        nextPlan: publicPlan(PLANS[IMAGE_MINIMUM_PLAN]),
+        usage: usageFromQuota(quota)
+      });
+    }
 
-    await incrementUsage(quota.user);
+    const answer = await chatWithOpenAI(normalizedMessage, images);
+
+    await incrementUsage(quota.user, requiredUnits);
 
     return res.json({
       text: answer,

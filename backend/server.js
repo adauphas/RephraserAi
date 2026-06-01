@@ -40,6 +40,9 @@ function corsOrigin(origin, callback) {
 
 app.use(cors({ origin: corsOrigin }));
 app.use("/api/billing/webhook", express.raw({ type: "application/json" }), stripeWebhookRoutes);
+// La route chat accepte des images (base64) : corps plus volumineux que le reste de l'API.
+// Montee avant le parseur JSON global (limite 12kb) pour ne pas etre rejetee.
+app.use("/api/chat", express.json({ limit: "4mb" }), chatRoutes);
 app.use(express.json({ limit: "12kb" }));
 
 app.get("/health", (req, res) => {
@@ -51,7 +54,6 @@ app.use(globalRateLimiter);
 app.use("/api/auth", authRoutes);
 app.use("/api/billing", billingRoutes);
 app.use("/api/rewrite", rewriteRoutes);
-app.use("/api/chat", chatRoutes);
 
 app.use((req, res) => {
   res.status(404).json({

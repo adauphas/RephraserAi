@@ -26,72 +26,125 @@
         </div>
       </header>
 
-      <section class="auth-panel panel">
-        <div class="section-title-row">
-          <h2 data-i18n="accountTitle">Compte</h2>
-        </div>
-        <p id="accountStatus" data-i18n="demoMode">Mode demo.</p>
+      <div id="sectionsContainer" class="sections-container">
+        <details class="auth-panel panel collapsible-panel" data-section="account" open>
+          <summary class="panel-summary">
+            <h2 data-i18n="accountTitle">Compte</h2>
+            <span class="section-controls">
+              <button type="button" class="reorder-btn" data-dir="up" aria-label="Monter la section" data-i18n-aria-label="moveSectionUp">&#9650;</button>
+              <button type="button" class="reorder-btn" data-dir="down" aria-label="Descendre la section" data-i18n-aria-label="moveSectionDown">&#9660;</button>
+            </span>
+          </summary>
+          <div class="collapsible-body">
+            <p id="accountStatus" data-i18n="demoMode">Mode demo.</p>
 
-        <form id="authForm" class="settings-form">
-          <label>
-            <span data-i18n="emailLabel">Email</span>
-            <input id="email" type="email" autocomplete="email" placeholder="vous@example.com" data-i18n-placeholder="emailPlaceholder" />
-          </label>
+            <form id="authForm" class="settings-form">
+              <label>
+                <span data-i18n="emailLabel">Email</span>
+                <input id="email" type="email" autocomplete="email" placeholder="vous@example.com" data-i18n-placeholder="emailPlaceholder" />
+              </label>
 
-          <label>
-            <span data-i18n="passwordLabel">Mot de passe</span>
-            <input id="password" type="password" autocomplete="current-password" placeholder="8 caracteres minimum" data-i18n-placeholder="passwordPlaceholder" />
-          </label>
+              <label>
+                <span data-i18n="passwordLabel">Mot de passe</span>
+                <input id="password" type="password" autocomplete="current-password" placeholder="8 caracteres minimum" data-i18n-placeholder="passwordPlaceholder" />
+              </label>
 
-          <div class="button-row">
-            <button id="loginButton" type="button" data-i18n="loginButton">Connexion</button>
-            <button id="registerButton" type="button" class="secondary-button" data-i18n="registerButton">Inscription</button>
+              <div class="button-row">
+                <button id="loginButton" type="button" data-i18n="loginButton">Connexion</button>
+                <button id="registerButton" type="button" class="secondary-button" data-i18n="registerButton">Inscription</button>
+              </div>
+            </form>
+
+            <div id="accountSignedIn" class="account-signed-in" hidden>
+              <button id="openProfile" type="button" data-i18n="profileButton">Profil</button>
+            </div>
           </div>
-        </form>
+        </details>
 
-        <div id="accountSignedIn" class="account-signed-in" hidden>
-          <button id="openProfile" type="button" data-i18n="profileButton">Profil</button>
-        </div>
-      </section>
+        <details class="billing-panel panel collapsible-panel" data-section="billing" open>
+          <summary class="panel-summary">
+            <h2 data-i18n="billingTitle">Abonnement</h2>
+            <span class="section-controls">
+              <button type="button" class="reorder-btn" data-dir="up" aria-label="Monter la section" data-i18n-aria-label="moveSectionUp">&#9650;</button>
+              <button type="button" class="reorder-btn" data-dir="down" aria-label="Descendre la section" data-i18n-aria-label="moveSectionDown">&#9660;</button>
+            </span>
+          </summary>
+          <div class="collapsible-body">
+            <p id="billingStatus" data-i18n="billingSignedOut">Connectez-vous pour gerer votre abonnement.</p>
+            <div id="plansList" class="plans-list" aria-live="polite"></div>
+          </div>
+        </details>
 
-      <details class="billing-panel panel collapsible-panel" open>
-        <summary class="panel-summary">
-          <h2 data-i18n="billingTitle">Abonnement</h2>
-        </summary>
-        <div class="collapsible-body">
-          <p id="billingStatus" data-i18n="billingSignedOut">Connectez-vous pour gerer votre abonnement.</p>
-          <div id="plansList" class="plans-list" aria-live="polite"></div>
-        </div>
-      </details>
+        <details class="composer-panel panel collapsible-panel" data-section="composer" open>
+          <summary class="panel-summary">
+            <span class="summary-title">
+              <h2 data-i18n="composerTitle">Ecrire dans l'extension</h2>
+              <span class="premium-pill" data-i18n="premiumBadge">Premium</span>
+            </span>
+            <span class="section-controls">
+              <button type="button" class="reorder-btn" data-dir="up" aria-label="Monter la section" data-i18n-aria-label="moveSectionUp">&#9650;</button>
+              <button type="button" class="reorder-btn" data-dir="down" aria-label="Descendre la section" data-i18n-aria-label="moveSectionDown">&#9660;</button>
+            </span>
+          </summary>
+          <div class="collapsible-body">
+            <form id="composerForm" class="composer-form">
+              <label>
+                <span data-i18n="composerTextLabel">Texte</span>
+                <textarea id="composerText" rows="4" data-i18n-placeholder="composerPlaceholder" placeholder="Ecris ou colle ton texte ici"></textarea>
+              </label>
+              <label>
+                <span data-i18n="composerActionLabel">Action</span>
+                <select id="composerAction">
+                  <option value="correct" data-i18n="actionCorrect">Corriger</option>
+                  <option value="professionalize" data-i18n="actionProfessionalize">Professionnaliser</option>
+                  <option value="enrich" data-i18n="actionEnrich">Enrichir</option>
+                  <option value="shorten" data-i18n="actionShorten">Raccourcir</option>
+                  <option value="reply" data-i18n="actionReply">Repondre a cette selection</option>
+                  <option value="linkedin_message" data-i18n="actionLinkedinMessage">Message LinkedIn</option>
+                  <option value="promptify" data-i18n="actionPromptify">Transformer en prompt IA</option>
+                </select>
+              </label>
+              <button id="composerSubmit" type="submit" data-i18n="composerSubmit">Generer</button>
+            </form>
+            <p id="composerStatus" class="composer-status" data-i18n="composerPremiumHelp">Disponible a partir de Premium.</p>
+          </div>
+        </details>
 
-      <section class="composer-panel panel">
-        <div class="section-title-row">
-          <h2 data-i18n="composerTitle">Ecrire dans l'extension</h2>
-          <span class="premium-pill" data-i18n="premiumBadge">Premium</span>
-        </div>
-        <form id="composerForm" class="composer-form">
-          <label>
-            <span data-i18n="composerTextLabel">Texte</span>
-            <textarea id="composerText" rows="4" data-i18n-placeholder="composerPlaceholder" placeholder="Ecris ou colle ton texte ici"></textarea>
-          </label>
-          <label>
-            <span data-i18n="composerActionLabel">Action</span>
-            <select id="composerAction">
-              <option value="correct" data-i18n="actionCorrect">Corriger</option>
-              <option value="professionalize" data-i18n="actionProfessionalize">Professionnaliser</option>
-              <option value="enrich" data-i18n="actionEnrich">Enrichir</option>
-              <option value="shorten" data-i18n="actionShorten">Raccourcir</option>
-              <option value="reply" data-i18n="actionReply">Repondre a cette selection</option>
-              <option value="linkedin_message" data-i18n="actionLinkedinMessage">Message LinkedIn</option>
-              <option value="promptify" data-i18n="actionPromptify">Transformer en prompt IA</option>
-            </select>
-          </label>
-          <button id="composerSubmit" type="submit" data-i18n="composerSubmit">Generer</button>
-        </form>
-        <p id="composerStatus" class="composer-status" data-i18n="composerPremiumHelp">Disponible a partir de Premium.</p>
-      </section>
+        <details class="chat-panel panel collapsible-panel" data-section="chat" open>
+          <summary class="panel-summary">
+            <span class="summary-title">
+              <h2 data-i18n="chatTitle">Discuter avec l'IA</h2>
+              <span class="premium-pill" data-i18n="premiumBadge">Premium</span>
+            </span>
+            <span class="section-controls">
+              <button type="button" class="reorder-btn" data-dir="up" aria-label="Monter la section" data-i18n-aria-label="moveSectionUp">&#9650;</button>
+              <button type="button" class="reorder-btn" data-dir="down" aria-label="Descendre la section" data-i18n-aria-label="moveSectionDown">&#9660;</button>
+            </span>
+          </summary>
+          <div class="collapsible-body">
+            <form id="chatForm" class="chat-form">
+              <label>
+                <span data-i18n="chatInputLabel">Votre question</span>
+                <textarea id="chatInput" rows="3" data-i18n-placeholder="chatPlaceholder" placeholder="Posez votre question a l'IA..."></textarea>
+              </label>
+              <div id="chatImages" class="chat-images" aria-live="polite"></div>
+              <div class="chat-toolbar">
+                <button id="chatAttach" type="button" class="secondary-button compact-button" data-i18n="chatAttachImage" data-i18n-aria-label="chatAttachImage">Ajouter une image</button>
+                <input id="chatImageInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple hidden />
+                <button id="chatSubmit" type="submit" data-i18n="chatSubmit">Envoyer</button>
+              </div>
+              <p id="chatImageHint" class="chat-image-hint" data-i18n="chatImageHint">Images reservees aux abonnes Premium+ (compte triple dans le quota).</p>
+            </form>
+            <div class="chat-answer-row" hidden id="chatAnswerRow">
+              <p id="chatAnswer" class="chat-answer" aria-live="polite"></p>
+              <button id="chatCopy" type="button" class="secondary-button compact-button" data-i18n="copyButton">Copier</button>
+            </div>
+            <p id="chatStatus" class="chat-status" data-i18n="chatPremiumHelp">Disponible a partir de Premium.</p>
+          </div>
+        </details>
+      </div>
 
-      <section class="last-result panel" aria-live="polite">
+      <section class="last-result panel" data-section="lastResult" aria-live="polite">
         <div class="section-title-row">
           <h2 data-i18n="lastResultTitle">Dernier resultat</h2>
           <button id="copyLastResult" type="button" class="secondary-button compact-button" data-i18n="copyButton" disabled>Copier</button>
@@ -148,6 +201,27 @@
           <button id="cancelSubscription" type="button" class="secondary-button" data-i18n="cancelSubscriptionButton">Annuler l'abonnement</button>
           <button id="resumeSubscription" type="button" class="secondary-button" data-i18n="resumeSubscriptionButton" hidden>Reprendre l'abonnement</button>
           <p id="profileSubStatus" class="profile-sub-status" aria-live="polite"></p>
+        </section>
+
+        <section class="profile-block panel">
+          <h3 data-i18n="profileQuickFixTitle">Correction rapide dans les champs</h3>
+          <p class="profile-hint" data-i18n="profileQuickFixHint">Une icone apparait quand vous ecrivez dans un champ. Un clic applique l'action choisie ci-dessous.</p>
+          <label class="toggle-row">
+            <input id="inPageIconToggle" type="checkbox" checked />
+            <span data-i18n="profileQuickFixToggle">Afficher l'icone dans les champs de saisie</span>
+          </label>
+          <label>
+            <span data-i18n="profileQuickActionLabel">Action au clic</span>
+            <select id="quickActionSelect">
+              <option value="correct" data-i18n="actionCorrect">Corriger</option>
+              <option value="professionalize" data-i18n="actionProfessionalize">Professionnaliser</option>
+              <option value="enrich" data-i18n="actionEnrich">Enrichir</option>
+              <option value="shorten" data-i18n="actionShorten">Raccourcir</option>
+              <option value="formal" data-i18n="actionFormal">Formel</option>
+              <option value="casual" data-i18n="actionCasual">Casual</option>
+            </select>
+          </label>
+          <p id="quickActionStatus" class="profile-sub-status" aria-live="polite"></p>
         </section>
 
         <section class="profile-block panel">
