@@ -52,7 +52,7 @@ router.post("/", rewriteRateLimiter, mockAuthMiddleware, async (req, res) => {
     }
 
     const normalizedText = text.trim();
-    const quota = verifyQuota({
+    const quota = await verifyQuota({
       userId: req.userId,
       text: normalizedText
     });
@@ -93,7 +93,7 @@ router.post("/", rewriteRateLimiter, mockAuthMiddleware, async (req, res) => {
     const prompt = buildPrompt(action, normalizedText);
     const rewrittenText = await rewriteWithOpenAI(prompt);
 
-    incrementUsage(quota.user);
+    await incrementUsage(quota.user);
 
     return res.json({
       text: rewrittenText,

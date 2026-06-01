@@ -1,13 +1,22 @@
-const path = require("path");
-const Database = require("better-sqlite3");
-const { PLANS } = require("../config/plans");
-const { hashPassword, createTokenHash } = require("../services/auth.service");
+const { Pool } = require("pg");
 
-const databasePath = process.env.DATABASE_URL || path.join(__dirname, "..", "data", "app.sqlite");
-const db = new Database(databasePath);
+// En prod : DATABASE_URL fournie par l'hebergeur (Render). En local : Postgres local.
+const connectionString = process.env.DATABASE_URL || "postgres://localhost:5432/rephraser_ai";
 
-db.pragma("journal_mode = WAL");
-db.pragma("foreign_keys = ON");
+// Les bases gerees (Render, etc.) exigent SSL ; en local on le desactive.
+// Si une connexion interne refuse le SSL ("server does not support SSL connections"),
+// mettre la variable d'environnement DATABASE_SSL=false.
+const isLocal = /localhost|127\.0\.0\.1/.test(connectionString);
+const sslDisabled = isLocal || process.env.DATABASE_SSL === "false";
+
+const pool = new Pool({
+  connectionString,
+  ssl: sslDisabled ? false : { rejectUnauthorized: false }
+});
+
+pool.on("error", (error) => {
+  console.error("Erreur inattendue du pool PostgreSQL:", error.message);
+});
 
 function getCurrentMonth() {
   const now = new Date();
@@ -19,8 +28,8 @@ function getCurrentDay() {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 }
 
-function migrate() {
-  db.exec(`
+async function migrate() {
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
       email TEXT NOT NULL UNIQUE,
@@ -34,105 +43,32 @@ function migrate() {
       stripe_customer_id TEXT,
       subscription_status TEXT NOT NULL DEFAULT 'free',
       subscription_cancel_at TEXT,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
+  `);
 
-    CREATE INDEX IF NOT EXISTS idx_users_api_token_hash ON users(api_token_hash);
-    CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+  await pool.query("CREATE INDEX IF NOT EXISTS idx_users_api_token_hash ON users(api_token_hash);");
+  await pool.query("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);");
+  // Au cas ou la table existait deja sans cette colonne (migration additive).
+  await pool.query("ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_cancel_at TEXT;");
 
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS stripe_events (
       id TEXT PRIMARY KEY,
       type TEXT NOT NULL,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
   `);
-
-  const columns = db.prepare("PRAGMA table_info(users)").all().map((column) => column.name);
-  if (!columns.includes("daily_usage")) {
-    db.prepare("ALTER TABLE users ADD COLUMN daily_usage INTEGER NOT NULL DEFAULT 0").run();
-  }
-  if (!columns.includes("current_day")) {
-    db.prepare("ALTER TABLE users ADD COLUMN current_day TEXT NOT NULL DEFAULT ''").run();
-    db.prepare("UPDATE users SET current_day = ? WHERE current_day = ''").run(getCurrentDay());
-  }
-  if (!columns.includes("subscription_cancel_at")) {
-    db.prepare("ALTER TABLE users ADD COLUMN subscription_cancel_at TEXT").run();
-  }
 }
 
-function seedDemoUsers() {
-  const existing = db.prepare("SELECT COUNT(*) AS count FROM users").get();
-
-  if (existing.count > 0) {
-    return;
-  }
-
-  const currentMonth = getCurrentMonth();
-  const currentDay = getCurrentDay();
-  const insertUser = db.prepare(`
-    INSERT OR IGNORE INTO users (
-      id,
-      email,
-      password_hash,
-      plan,
-      monthly_usage,
-      current_month,
-      daily_usage,
-      current_day,
-      api_token_hash,
-      subscription_status
-    ) VALUES (
-      @id,
-      @email,
-      @passwordHash,
-      @plan,
-      0,
-      @currentMonth,
-      0,
-      @currentDay,
-      @apiTokenHash,
-      @subscriptionStatus
-    )
-  `);
-
-  const users = [
-    { id: "user_free", email: "free@example.com", plan: "Free", token: "demo_free_token", subscriptionStatus: "free" },
-    { id: "user_free_plus", email: "free-plus@example.com", plan: "Free+", token: "demo_free_plus_token", subscriptionStatus: "active" },
-    { id: "user_premium", email: "premium@example.com", plan: "Premium", token: "demo_premium_token", subscriptionStatus: "active" },
-    { id: "user_premium_plus", email: "premium-plus@example.com", plan: "Premium+", token: "demo_premium_plus_token", subscriptionStatus: "active" },
-    { id: "user_premium_pro", email: "premium-pro@example.com", plan: "Premium Pro", token: "demo_premium_pro_token", subscriptionStatus: "active" }
-  ];
-
-  const seed = db.transaction(() => {
-    for (const user of users) {
-      if (!PLANS[user.plan]) {
-        throw new Error(`Plan inconnu pendant le seed: ${user.plan}`);
-      }
-
-      insertUser.run({
-        id: user.id,
-        email: user.email,
-        passwordHash: hashPassword("password-demo"),
-        plan: user.plan,
-        currentMonth,
-        currentDay,
-        apiTokenHash: createTokenHash(user.token),
-        subscriptionStatus: user.subscriptionStatus
-      });
-    }
-  });
-
-  seed();
-}
-
-function initDatabase() {
-  migrate();
+async function initDatabase() {
+  await migrate();
   // Pas de comptes de demonstration en production : seuls les comptes reels sont crees.
 }
 
 module.exports = {
-  db,
+  pool,
   initDatabase,
   getCurrentMonth,
   getCurrentDay

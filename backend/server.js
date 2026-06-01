@@ -12,8 +12,6 @@ const stripeWebhookRoutes = require("./routes/stripe.webhook.routes");
 const app = express();
 const port = Number(process.env.PORT || 3006);
 
-initDatabase();
-
 function getAllowedOrigins() {
   return String(process.env.CORS_ALLOWED_ORIGINS || "")
     .split(",")
@@ -70,15 +68,22 @@ app.use((error, req, res, next) => {
   });
 });
 
-const server = app.listen(port, () => {
-  console.log(`Backend Rephraser AI demarre sur http://localhost:${port}`);
-});
+initDatabase()
+  .then(() => {
+    const server = app.listen(port, () => {
+      console.log(`Backend Rephraser AI demarre sur le port ${port}`);
+    });
 
-server.on("error", (error) => {
-  if (error.code === "EADDRINUSE") {
-    console.error(`Le port ${port} est deja utilise. Fermez le process existant ou lancez avec un autre PORT, par exemple PORT=3006 npm start.`);
+    server.on("error", (error) => {
+      if (error.code === "EADDRINUSE") {
+        console.error(`Le port ${port} est deja utilise. Fermez le process existant ou lancez avec un autre PORT.`);
+        process.exit(1);
+      }
+
+      throw error;
+    });
+  })
+  .catch((error) => {
+    console.error("Echec de l'initialisation de la base PostgreSQL:", error.message);
     process.exit(1);
-  }
-
-  throw error;
-});
+  });

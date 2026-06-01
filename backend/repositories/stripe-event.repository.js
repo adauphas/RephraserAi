@@ -1,15 +1,15 @@
-const { db } = require("../database/db");
+const { pool } = require("../database/db");
 
-function hasProcessedStripeEvent(eventId) {
-  const event = db.prepare("SELECT id FROM stripe_events WHERE id = ?").get(eventId);
-  return Boolean(event);
+async function hasProcessedStripeEvent(eventId) {
+  const { rows } = await pool.query("SELECT id FROM stripe_events WHERE id = $1", [eventId]);
+  return rows.length > 0;
 }
 
-function markStripeEventProcessed(eventId, eventType) {
-  db.prepare(`
-    INSERT OR IGNORE INTO stripe_events (id, type)
-    VALUES (?, ?)
-  `).run(eventId, eventType);
+async function markStripeEventProcessed(eventId, eventType) {
+  await pool.query(
+    "INSERT INTO stripe_events (id, type) VALUES ($1, $2) ON CONFLICT (id) DO NOTHING",
+    [eventId, eventType]
+  );
 }
 
 module.exports = {

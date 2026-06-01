@@ -1,5 +1,5 @@
 const crypto = require("crypto");
-const { db, getCurrentDay, getCurrentMonth } = require("../database/db");
+const { pool, getCurrentMonth, getCurrentDay } = require("../database/db");
 
 function mapUser(row) {
   if (!row) {
@@ -24,139 +24,117 @@ function mapUser(row) {
   };
 }
 
-function createUser({ email, passwordHash, plan, apiTokenHash }) {
+async function createUser({ email, passwordHash, plan, apiTokenHash }) {
   const id = crypto.randomUUID();
+  const { rows } = await pool.query(
+    `INSERT INTO users (
+      id, email, password_hash, plan,
+      monthly_usage, current_month, daily_usage, current_day,
+      api_token_hash, subscription_status
+    ) VALUES ($1, $2, $3, $4, 0, $5, 0, $6, $7, $8)
+    RETURNING *`,
+    [id, email, passwordHash, plan, getCurrentMonth(), getCurrentDay(), apiTokenHash, plan === "Free" ? "free" : "active"]
+  );
 
-  db.prepare(`
-    INSERT INTO users (
-      id,
-      email,
-      password_hash,
-      plan,
-      monthly_usage,
-      current_month,
-      daily_usage,
-      current_day,
-      api_token_hash,
-      subscription_status
-    ) VALUES (
-      @id,
-      @email,
-      @passwordHash,
-      @plan,
-      0,
-      @currentMonth,
-      0,
-      @currentDay,
-      @apiTokenHash,
-      @subscriptionStatus
-    )
-  `).run({
-    id,
-    email,
-    passwordHash,
-    plan,
-    currentMonth: getCurrentMonth(),
-    currentDay: getCurrentDay(),
-    apiTokenHash,
-    subscriptionStatus: plan === "Free" ? "free" : "active"
-  });
-
-  return findUserById(id);
+  return mapUser(rows[0]);
 }
 
-function findUserById(id) {
-  return mapUser(db.prepare("SELECT * FROM users WHERE id = ?").get(id));
+async function findUserById(id) {
+  const { rows } = await pool.query("SELECT * FROM users WHERE id = $1", [id]);
+  return mapUser(rows[0]);
 }
 
-function findUserByEmail(email) {
-  return mapUser(db.prepare("SELECT * FROM users WHERE lower(email) = lower(?)").get(email));
+async function findUserByEmail(email) {
+  const { rows } = await pool.query("SELECT * FROM users WHERE lower(email) = lower($1)", [email]);
+  return mapUser(rows[0]);
 }
 
-function findUserByTokenHash(apiTokenHash) {
-  return mapUser(db.prepare("SELECT * FROM users WHERE api_token_hash = ?").get(apiTokenHash));
+async function findUserByTokenHash(apiTokenHash) {
+  const { rows } = await pool.query("SELECT * FROM users WHERE api_token_hash = $1", [apiTokenHash]);
+  return mapUser(rows[0]);
 }
 
-function updateTokenHash(userId, apiTokenHash) {
-  db.prepare(`
-    UPDATE users
-    SET api_token_hash = ?, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `).run(apiTokenHash, userId);
+async function updateTokenHash(userId, apiTokenHash) {
+  await pool.query(
+    "UPDATE users SET api_token_hash = $1, updated_at = now() WHERE id = $2",
+    [apiTokenHash, userId]
+  );
 }
 
-function updateMonthlyUsage(userId, monthlyUsage, currentMonth) {
-  db.prepare(`
-    UPDATE users
-    SET monthly_usage = ?, current_month = ?, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `).run(monthlyUsage, currentMonth, userId);
+async function updateMonthlyUsage(userId, monthlyUsage, currentMonth) {
+  await pool.query(
+    "UPDATE users SET monthly_usage = $1, current_month = $2, updated_at = now() WHERE id = $3",
+    [monthlyUsage, currentMonth, userId]
+  );
 }
 
-function updateDailyUsage(userId, dailyUsage, currentDay) {
-  db.prepare(`
-    UPDATE users
-    SET daily_usage = ?, current_day = ?, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `).run(dailyUsage, currentDay, userId);
+async function updateDailyUsage(userId, dailyUsage, currentDay) {
+  await pool.query(
+    "UPDATE users SET daily_usage = $1, current_day = $2, updated_at = now() WHERE id = $3",
+    [dailyUsage, currentDay, userId]
+  );
 }
 
-function incrementMonthlyUsage(userId) {
-  db.prepare(`
-    UPDATE users
-    SET
-      monthly_usage = monthly_usage + 1,
-      daily_usage = daily_usage + 1,
-      updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `).run(userId);
+async function incrementMonthlyUsage(userId) {
+  const { rows } = await pool.query(
+    `UPDATE users
+     SET monthly_usage = monthly_usage + 1,
+         daily_usage = daily_usage + 1,
+         updated_at = now()
+     WHERE id = $1
+     RETURNING *`,
+    [userId]
+  );
 
-  return findUserById(userId);
+  return mapUser(rows[0]);
 }
 
-function updatePlan(userId, plan, subscriptionStatus, stripeCustomerId = null) {
-  db.prepare(`
-    UPDATE users
-    SET
-      plan = ?,
-      subscription_status = ?,
-      stripe_customer_id = COALESCE(?, stripe_customer_id),
-      subscription_cancel_at = NULL,
-      updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `).run(plan, subscriptionStatus, stripeCustomerId, userId);
+async function updatePlan(userId, plan, subscriptionStatus, stripeCustomerId = null) {
+  const { rows } = await pool.query(
+    `UPDATE users
+     SET plan = $1,
+         subscription_status = $2,
+         stripe_customer_id = COALESCE($3, stripe_customer_id),
+         subscription_cancel_at = NULL,
+         updated_at = now()
+     WHERE id = $4
+     RETURNING *`,
+    [plan, subscriptionStatus, stripeCustomerId, userId]
+  );
 
-  return findUserById(userId);
+  return mapUser(rows[0]);
 }
 
-function scheduleCancellation(userId, cancelAt) {
-  db.prepare(`
-    UPDATE users
-    SET
-      subscription_status = 'canceling',
-      subscription_cancel_at = ?,
-      updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `).run(cancelAt, userId);
+async function scheduleCancellation(userId, cancelAt) {
+  const { rows } = await pool.query(
+    `UPDATE users
+     SET subscription_status = 'canceling',
+         subscription_cancel_at = $1,
+         updated_at = now()
+     WHERE id = $2
+     RETURNING *`,
+    [cancelAt, userId]
+  );
 
-  return findUserById(userId);
+  return mapUser(rows[0]);
 }
 
-function resumeSubscription(userId) {
-  db.prepare(`
-    UPDATE users
-    SET
-      subscription_status = 'active',
-      subscription_cancel_at = NULL,
-      updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `).run(userId);
+async function resumeSubscription(userId) {
+  const { rows } = await pool.query(
+    `UPDATE users
+     SET subscription_status = 'active',
+         subscription_cancel_at = NULL,
+         updated_at = now()
+     WHERE id = $1
+     RETURNING *`,
+    [userId]
+  );
 
-  return findUserById(userId);
+  return mapUser(rows[0]);
 }
 
-function deleteUser(userId) {
-  return db.prepare("DELETE FROM users WHERE id = ?").run(userId);
+async function deleteUser(userId) {
+  return pool.query("DELETE FROM users WHERE id = $1", [userId]);
 }
 
 module.exports = {

@@ -125,7 +125,7 @@ async function cancelSubscription({ user }) {
     effectiveDate = computeDemoPeriodEnd(user).toISOString();
   }
 
-  const updatedUser = scheduleCancellation(user.id, effectiveDate);
+  const updatedUser = await scheduleCancellation(user.id, effectiveDate);
 
   return {
     user: updatedUser,
@@ -150,7 +150,7 @@ async function resumeSubscription({ user }) {
     }
   }
 
-  const updatedUser = resumeSubscriptionRecord(user.id);
+  const updatedUser = await resumeSubscriptionRecord(user.id);
   return { user: updatedUser };
 }
 
@@ -183,7 +183,7 @@ async function handleCheckoutSessionCompleted(session) {
     throw new Error("Session Stripe sans userId.");
   }
 
-  const user = findUserById(userId);
+  const user = await findUserById(userId);
 
   if (!user) {
     throw new Error("Utilisateur introuvable pour cette session Stripe.");
@@ -206,7 +206,7 @@ async function handleCheckoutSessionCompleted(session) {
 }
 
 async function handleStripeWebhookEvent(event) {
-  if (hasProcessedStripeEvent(event.id)) {
+  if (await hasProcessedStripeEvent(event.id)) {
     return {
       ignored: true,
       reason: "already_processed"
@@ -215,14 +215,14 @@ async function handleStripeWebhookEvent(event) {
 
   if (event.type === "checkout.session.completed") {
     const user = await handleCheckoutSessionCompleted(event.data.object);
-    markStripeEventProcessed(event.id, event.type);
+    await markStripeEventProcessed(event.id, event.type);
     return {
       handled: true,
       user
     };
   }
 
-  markStripeEventProcessed(event.id, event.type);
+  await markStripeEventProcessed(event.id, event.type);
   return {
     ignored: true,
     reason: "unhandled_event_type"

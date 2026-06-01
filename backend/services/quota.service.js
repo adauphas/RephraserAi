@@ -17,23 +17,23 @@ function countCharacters(text) {
   return Array.from(text).length;
 }
 
-function ensureCurrentMonth(user) {
+async function ensureCurrentMonth(user) {
   const month = getCalendarMonth();
 
   if (user.currentMonth !== month) {
     user.currentMonth = month;
     user.monthlyUsage = 0;
-    updateMonthlyUsage(user.id, 0, month);
+    await updateMonthlyUsage(user.id, 0, month);
   }
 }
 
-function ensureCurrentDay(user) {
+async function ensureCurrentDay(user) {
   const day = getCalendarDay();
 
   if (user.currentDay !== day) {
     user.currentDay = day;
     user.dailyUsage = 0;
-    updateDailyUsage(user.id, 0, day);
+    await updateDailyUsage(user.id, 0, day);
   }
 }
 
@@ -47,8 +47,8 @@ function getNextPlanName(planName) {
   return PLAN_ORDER[index + 1];
 }
 
-function verifyQuota({ userId, text }) {
-  const user = findUserById(userId);
+async function verifyQuota({ userId, text }) {
+  const user = await findUserById(userId);
 
   if (!user) {
     return {
@@ -68,8 +68,8 @@ function verifyQuota({ userId, text }) {
     };
   }
 
-  ensureCurrentMonth(user);
-  ensureCurrentDay(user);
+  await ensureCurrentMonth(user);
+  await ensureCurrentDay(user);
 
   const characterCount = countCharacters(text);
 
@@ -137,10 +137,10 @@ function verifyQuota({ userId, text }) {
   };
 }
 
-function incrementUsage(user) {
-  ensureCurrentMonth(user);
-  ensureCurrentDay(user);
-  const updatedUser = incrementMonthlyUsage(user.id);
+async function incrementUsage(user) {
+  await ensureCurrentMonth(user);
+  await ensureCurrentDay(user);
+  const updatedUser = await incrementMonthlyUsage(user.id);
   user.monthlyUsage = updatedUser.monthlyUsage;
   user.currentMonth = updatedUser.currentMonth;
   user.dailyUsage = updatedUser.dailyUsage;

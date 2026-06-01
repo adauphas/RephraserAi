@@ -19,20 +19,20 @@ const { cancelSubscriptionImmediately } = require("../services/billing.service")
 
 const router = express.Router();
 
-router.post("/register", (req, res) => {
+router.post("/register", async (req, res) => {
   try {
     const email = assertEmail(req.body?.email);
     const password = assertPassword(req.body?.password);
     const plan = "Free";
 
-    if (findUserByEmail(email)) {
+    if (await findUserByEmail(email)) {
       return res.status(409).json({
         error: "Un compte existe deja avec cet email."
       });
     }
 
     const token = createAuthToken();
-    const user = createUser({
+    const user = await createUser({
       email,
       passwordHash: hashPassword(password),
       plan,
@@ -50,11 +50,11 @@ router.post("/register", (req, res) => {
   }
 });
 
-router.post("/login", (req, res) => {
+router.post("/login", async (req, res) => {
   try {
     const email = assertEmail(req.body?.email);
     const password = String(req.body?.password || "");
-    const user = findUserByEmail(email);
+    const user = await findUserByEmail(email);
 
     if (!user || !verifyPassword(password, user.passwordHash)) {
       return res.status(401).json({
@@ -63,7 +63,7 @@ router.post("/login", (req, res) => {
     }
 
     const token = createAuthToken();
-    updateTokenHash(user.id, createTokenHash(token));
+    await updateTokenHash(user.id, createTokenHash(token));
 
     return res.json({
       token,

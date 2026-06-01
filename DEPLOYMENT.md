@@ -13,6 +13,14 @@ Hébergeur recommandé : **Render** (service web Node + base PostgreSQL gérée,
 
 > Note : le code backend utilise aujourd'hui SQLite. La migration du code vers PostgreSQL est la prochaine étape (à faire avant le déploiement). Le reste du guide est valable tel quel.
 
+## 0. Dépôt GitHub (le projet entier est poussé)
+
+Le repo contient tout le projet : `backend/`, `extension/`, `site/`. C'est parfait : chaque hébergeur ne déploiera que le dossier qui le concerne (Render → `backend/`, Netlify → `site/`).
+
+> 🔒 **Vérification sécurité — à faire maintenant.** Le `.gitignore` exclut bien `backend/.env`, `backend/node_modules/` et la base SQLite. Va sur ton repo GitHub et confirme que **`backend/.env` n'apparaît PAS** (tu ne dois voir que `backend/.env.example`). S'il y est (parce qu'il aurait été commité avant d'être ignoré), considère tes clés comme compromises : **régénère immédiatement** ta clé OpenAI et tes clés Stripe, retire le fichier de l'historique git, puis remets les vraies valeurs uniquement dans les variables d'environnement Render.
+
+> Bonus : comme `site/` est aussi sur GitHub, tu peux connecter **Netlify au repo** (Publish directory = `site`) pour redéployer le site automatiquement à chaque push, au lieu du glisser-déposer du zip.
+
 ---
 
 ## 1. Créer la base PostgreSQL
@@ -22,9 +30,8 @@ Hébergeur recommandé : **Render** (service web Node + base PostgreSQL gérée,
 
 ## 2. Déployer le backend
 
-1. Pousse le projet sur **GitHub** (au moins le dossier `backend/`).
-2. Render → **New → Web Service** → connecte le repo.
-3. Réglages :
+1. Render → **New → Web Service** → connecte ton repo GitHub (déjà poussé).
+2. Réglages (c'est le **Root Directory** qui fait que seul le backend est déployé, même si le repo contient aussi `extension/` et `site/`) :
    - **Root Directory** : `backend`
    - **Build Command** : `npm install`
    - **Start Command** : `npm start`
@@ -82,7 +89,19 @@ Les comptes (email, **mot de passe haché**, offre, quotas, statut d'abonnement,
 
 ---
 
-## Reste à faire côté code (je m'en occupe)
+## État du code
 
-- [ ] Migrer le backend de SQLite vers PostgreSQL (`pg`, requêtes asynchrones).
+- [x] **Backend migré vers PostgreSQL** (`pg`, requêtes asynchrones). Plus de SQLite ni de `better-sqlite3`.
+- [x] Extension passée en mode prod (démo/test retirés).
+- [ ] Avant de pousser : lance **`npm install`** dans `backend/` pour régénérer `package-lock.json` (il référence encore `better-sqlite3`), puis commit. Sinon le build Render reste correct car il utilise `npm install`.
 - [ ] Une fois l'URL backend connue : l'intégrer dans l'extension + `host_permissions` (étape 5).
+
+### Tester en local (optionnel)
+
+Il te faut un PostgreSQL local. Démarre une base, mets son URL dans `backend/.env` :
+
+```
+DATABASE_URL=postgres://localhost:5432/rephraser_ai
+```
+
+Puis `cd backend && npm install && npm start`. Le script `backend/test-integration.sh` valide alors tout le parcours (inscription → connexion → /me → suppression RGPD).
