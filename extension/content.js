@@ -1,5 +1,9 @@
+// Guard contre la double injection (manifest.json + scripting.executeScript)
+if (typeof window.__rephraserAiLoaded !== "undefined") { throw new Error("already loaded"); }
+window.__rephraserAiLoaded = true;
+
 // PROD : remplacer par l'URL HTTPS de ton backend deploye (voir DEPLOYMENT.md).
-const DEFAULT_BACKEND_URL = "http://localhost:3006";
+const DEFAULT_BACKEND_URL = "https://rephraserai.onrender.com";
 const DEFAULT_USER_ID = "user_free";
 
 let lastEditableSelection = null;

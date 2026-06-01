@@ -50,7 +50,7 @@ Le repo contient tout le projet : `backend/`, `extension/`, `site/`. C'est parfa
 | `STRIPE_PRICE_PREMIUM` | idem |
 | `STRIPE_PRICE_PREMIUM_PLUS` | idem |
 | `STRIPE_PRICE_PREMIUM_PRO` | idem |
-| `APP_URL` | URL publique du backend (ex. `https://rephraser-ai-backend.onrender.com`) — sert aux redirections Stripe |
+| `APP_URL` | `https://rephraserai.onrender.com` — sert aux redirections Stripe |
 | `CORS_ALLOWED_ORIGINS` | `chrome-extension://TON_ID_EXTENSION` (+ éventuellement l'URL du site) |
 
 > ⚠️ Ne mets jamais ces clés dans le code ni sur GitHub : uniquement dans les variables d'environnement de Render.
@@ -58,13 +58,13 @@ Le repo contient tout le projet : `backend/`, `extension/`, `site/`. C'est parfa
 ## 4. Webhook Stripe
 
 1. Stripe Dashboard (mode **live**) → Developers → Webhooks → **Add endpoint**.
-2. URL : `https://TON-BACKEND.onrender.com/api/billing/webhook`
+2. URL : `https://rephraserai.onrender.com/api/billing/webhook`
 3. Événement : `checkout.session.completed`
 4. Copie le **Signing secret** (`whsec_...`) → variable `STRIPE_WEBHOOK_SECRET` (étape 3).
 
 ## 5. Pointer l'extension vers la prod
 
-Une fois l'URL backend connue (ex. `https://rephraser-ai-backend.onrender.com`), remplace `http://localhost:3006` par cette URL **HTTPS** dans :
+Une fois l'URL backend connue (`https://rephraserai.onrender.com`), remplace `http://localhost:3006` par cette URL **HTTPS** dans :
 
 - `extension/popup.js` → `DEFAULT_BACKEND_URL` (en haut, repère « PROD : … »)
 - `extension/background.js` → `DEFAULT_BACKEND_URL`
@@ -73,7 +73,7 @@ Une fois l'URL backend connue (ex. `https://rephraser-ai-backend.onrender.com`),
 Puis dans `extension/manifest.json`, remplace les `host_permissions` localhost par ton domaine :
 
 ```json
-"host_permissions": ["https://rephraser-ai-backend.onrender.com/*"]
+"host_permissions": ["https://rephraserai.onrender.com/*"]
 ```
 
 Recharge l'extension, vérifie que connexion + abonnement fonctionnent, puis re-zippe pour le Chrome Web Store.

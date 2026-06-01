@@ -1,6 +1,6 @@
 // PROD : remplacer par l'URL HTTPS de ton backend deploye (a changer aussi dans
 // background.js, content.js, le manifest host_permissions et le backend). Voir DEPLOYMENT.md.
-const DEFAULT_BACKEND_URL = "http://localhost:3006";
+const DEFAULT_BACKEND_URL = "https://rephraserai.onrender.com";
 const DEFAULT_USER_ID = "user_free";
 const LEGACY_BACKEND_URLS = new Set([
   "http://localhost:3000",

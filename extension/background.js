@@ -2,7 +2,7 @@ importScripts("i18n-runtime.js");
 
 const PARENT_MENU_ID = "ai_rewriter_parent";
 // PROD : remplacer par l'URL HTTPS de ton backend deploye (voir DEPLOYMENT.md).
-const DEFAULT_BACKEND_URL = "http://localhost:3006";
+const DEFAULT_BACKEND_URL = "https://rephraserai.onrender.com";
 const LEGACY_BACKEND_URLS = new Set([
   "http://localhost:3000",
   "http://127.0.0.1:3000",
