@@ -11,6 +11,10 @@ const chatRoutes = require("./routes/chat.routes");
 const stripeWebhookRoutes = require("./routes/stripe.webhook.routes");
 
 const app = express();
+// Render (et la plupart des hebergeurs) place l'app derriere un unique proxy qui ajoute
+// l'en-tete X-Forwarded-For. On fait confiance a ce seul proxy pour que express-rate-limit
+// identifie correctement les IP (corrige ERR_ERL_UNEXPECTED_X_FORWARDED_FOR).
+app.set("trust proxy", 1);
 const port = Number(process.env.PORT || 3006);
 
 function getAllowedOrigins() {
